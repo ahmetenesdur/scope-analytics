@@ -283,9 +283,19 @@ export async function scanLogs(
     VALUES (?, ?)
   `);
 
+	// Check if transaction already exists and has missing data
+	const checkTxExists = db.prepare(`
+    SELECT 
+      CASE WHEN EXISTS(SELECT 1 FROM logs WHERE tx_hash = ?) THEN 1 ELSE 0 END as log_exists,
+      CASE WHEN EXISTS(SELECT 1 FROM fees WHERE tx_hash = ?) THEN 1 ELSE 0 END as fee_exists,
+      CASE WHEN EXISTS(SELECT 1 FROM swap_events WHERE tx_hash = ?) THEN 1 ELSE 0 END as swap_exists
+  `);
+
 	let currentBlock = startBlock;
-	let totalLogs = 0;
-	let totalSwaps = 0;
+	let processedLogs = 0;
+	let processedSwaps = 0;
+	let filledMissingFees = 0;
+	let filledMissingSwaps = 0;
 
 	while (currentBlock <= latestBlock) {
 		const endBlock =
@@ -312,6 +322,7 @@ export async function scanLogs(
 								fee_wei: feeWei.toString(),
 							};
 
+							// Decode swap events from the current log
 							const decodedSwaps = [];
 							if (log.address.toLowerCase() === address.toLowerCase()) {
 								try {
@@ -340,6 +351,68 @@ export async function scanLogs(
 									}
 								} catch {
 									/* Not a swap event or decoding failed */
+								}
+							}
+
+							// If transaction already exists (only in full scan mode), check for missing data and decode all logs from receipt
+							// In incremental mode, we only scan new blocks, so existing transactions shouldn't be re-processed
+							if (!incremental) {
+								const txHash = log.transactionHash!;
+								const txStatus = checkTxExists.get(txHash, txHash, txHash) as
+									| {
+											log_exists: number;
+											fee_exists: number;
+											swap_exists: number;
+									  }
+									| undefined;
+
+								// If transaction exists but missing fee, ensure fee data is included
+								if (txStatus?.log_exists && !txStatus.fee_exists) {
+									filledMissingFees++;
+									// Fee data already calculated above, will be inserted
+								}
+
+								// If transaction exists but missing swap events, decode all logs from receipt
+								if (txStatus?.log_exists && !txStatus.swap_exists && receipt.logs) {
+									let foundSwapsInReceipt = 0;
+									for (const recLog of receipt.logs) {
+										if (
+											recLog.address.toLowerCase() === address.toLowerCase()
+										) {
+											try {
+												const decoded = decodeEventLog({
+													abi: citreaRouterAbi,
+													data: recLog.data,
+													topics: recLog.topics,
+												});
+												if (decoded.eventName === "Swap") {
+													const args =
+														decoded.args as unknown as SwapEventData;
+													decodedSwaps.push({
+														tx_hash: txHash,
+														log_index:
+															typeof recLog.logIndex !== "undefined"
+																? Number(recLog.logIndex)
+																: 0,
+														block_number: Number(log.blockNumber!),
+														sender: args.sender.toLowerCase(),
+														amount_in: args.amount_in.toString(),
+														amount_out: args.amount_out.toString(),
+														token_in: args.token_in.toLowerCase(),
+														token_out: args.token_out.toLowerCase(),
+														destination: args.destination.toLowerCase(),
+														timestamp: Number(block.timestamp),
+													});
+													foundSwapsInReceipt++;
+												}
+											} catch {
+												/* Not a swap event or decoding failed */
+											}
+										}
+									}
+									if (foundSwapsInReceipt > 0) {
+										filledMissingSwaps++;
+									}
 								}
 							}
 
@@ -393,21 +466,21 @@ export async function scanLogs(
 										swap.destination,
 										swap.timestamp
 									);
-									totalSwaps++;
+									processedSwaps++;
 								}
 							}
 						}
 					});
 
 					insertMany(validData);
-					totalLogs += validData.length;
+					processedLogs += validData.length;
 				}
 			}
 
 			const denom = latestBlock - startBlock;
 			const progress = denom === 0n ? 100 : Number(((endBlock - startBlock) * 100n) / denom);
 			console.log(
-				`  Block ${endBlock.toLocaleString()} | ${logs.length} logs | ${totalSwaps} swaps | ${progress.toFixed(1)}% complete`
+				`  Block ${endBlock.toLocaleString()} | ${logs.length} logs | ${processedSwaps} swaps | ${progress.toFixed(1)}% complete`
 			);
 
 			currentBlock = endBlock + 1n;
@@ -418,7 +491,21 @@ export async function scanLogs(
 	}
 
 	setMeta(db, "lastScannedBlock", latestBlock.toString());
-	console.log(`\n✓ Scan complete! Indexed ${totalLogs} transactions, ${totalSwaps} swap events`);
+
+	// Get actual counts from database to show accurate numbers
+	const actualTxCount = db.prepare("SELECT COUNT(*) as count FROM logs").get() as {
+		count: number;
+	};
+	const actualSwapCount = db.prepare("SELECT COUNT(*) as count FROM swap_events").get() as {
+		count: number;
+	};
+
+	let summary = `\n✓ Scan complete! Processed ${processedLogs.toLocaleString()} transactions, ${processedSwaps.toLocaleString()} swap events`;
+	summary += `\n  📊 Database now contains: ${actualTxCount.count.toLocaleString()} transactions, ${actualSwapCount.count.toLocaleString()} swap events`;
+	if (filledMissingFees > 0 || filledMissingSwaps > 0) {
+		summary += `\n  🔧 Filled missing data: ${filledMissingFees} fees, ${filledMissingSwaps} swap events`;
+	}
+	console.log(summary);
 }
 
 function formatWeiToCbtc(wei: bigint, fractionDigits = 6): string {
