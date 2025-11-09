@@ -1013,8 +1013,7 @@ function calculateEnhancedMetrics(
                     COUNT(*) AS swapsEvent
              FROM swap_events s
              GROUP BY day
-             ORDER BY day DESC
-             LIMIT 30`
+             ORDER BY day DESC`
 		)
 		.all() as Array<{ day: string; swapsEvent: number }>;
 	const dailyEventMap = new Map<string, number>(
