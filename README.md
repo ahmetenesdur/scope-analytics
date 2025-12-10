@@ -117,7 +117,7 @@ pnpm start -- --network citrea --incremental --serve --export report.json
 {
   "uniqueUsers": 29326,
   "uniqueTxCount": 137368,
-  "totalFees_cBTC": "123.456789",
+  "totalFees": "123.456789 cBTC",
   "totalSwaps": 137365,
   "range": {"firstBlock": 1234567, "lastBlock": 16850000, "lastUpdatedAt": "2025-10-15T16:59:34.000Z"},
   "volumeByToken": {
@@ -142,7 +142,7 @@ pnpm start -- --network citrea --incremental --serve --export report.json
     "uniqueUsers": 360,
     "swapsTx": 577,
     "swapsEvent": 580,
-    "fees_cBTC": "0.123456"
+    "fees": "0.123456 cBTC"
   }],
   "recentSwaps": [{"tx_hash": "0x...", "amountIn": "0.001000 (WCBTC)", "amountOut": "6.522482 (USDC)", "time": "2025-10-15T16:59:34.000Z"}]
 }

@@ -94,7 +94,7 @@ Complete documentation for Scope.
 - ✅ HTTP API server
 - ✅ JSON export functionality
 - ✅ Event decoding and analysis
-- ✅ Real fee metrics (totalFees_cBTC) and daily fees (dailyStats.fees_cBTC)
+- ✅ Real fee metrics (totalFees) and daily fees (dailyStats.fees)
 - ✅ Token-aware normalization using ERC20 decimals & symbols
 - ✅ Recent swaps summary (recentSwaps) and optional raw events (swapEvents)
 - ✅ Multi-swap event support (per-transaction `log_index`, accurate counts & volumes)

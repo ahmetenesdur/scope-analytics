@@ -70,7 +70,7 @@ CREATE TABLE fees (
 
 Indexes: `tx_hash`
 
-Stores actual paid fee per transaction in wei (`gasUsed * effectiveGasPrice`). Useful for computing `totalFees_cBTC`.
+Stores actual paid fee per transaction in wei (`gasUsed * effectiveGasPrice`). Useful for computing `totalFees`.
 
 #### `token_metadata` - Token Decimals and Symbols
 
@@ -208,21 +208,21 @@ WHERE l.from_address = '0x...'
 ORDER BY l.block_number DESC;
 ```
 
-### Total Fees (cBTC)
+### Total Fees
 
 ```sql
 
-SELECT (SUM(CAST(fee_wei AS REAL)) / 1e18) AS total_fees_cbtc FROM fees;
+SELECT (SUM(CAST(fee_wei AS REAL)) / 1e18) AS total_fees FROM fees;
 ```
 
-Or in application code, sum `fee_wei` as BigInt and format `wei → cBTC`.
+Or in application code, sum `fee_wei` as BigInt and format `wei → native currency` (e.g. "1.23 cBTC").
 
 ### Fees By Day
 
 ```sql
 SELECT
   strftime('%Y-%m-%d', l.timestamp, 'unixepoch') AS day,
-  SUM(CAST(f.fee_wei AS REAL)) / 1e18 AS fees_cBTC
+  SUM(CAST(f.fee_wei AS REAL)) / 1e18 AS fees
 FROM fees f
 JOIN logs l ON l.tx_hash = f.tx_hash
 GROUP BY day
@@ -230,7 +230,7 @@ ORDER BY day DESC
 LIMIT 30;
 ```
 
-Application code should aggregate with BigInt for exact results.
+Application code should aggregate with BigInt for exact results and format with symbol.
 
 ## Backfill Process
 

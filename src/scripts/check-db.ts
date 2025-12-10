@@ -60,7 +60,7 @@ try {
 			const fracStr = fraction.toString().padStart(18, "0").slice(0, 6);
 			return `${integer.toString()}.${fracStr}`;
 		})();
-		console.log(`  Total Fees: ${totalFeesCBTC} cBTC`);
+		console.log(`  Total Fees: ${totalFeesCBTC} (native)`);
 	}
 
 	// Block range

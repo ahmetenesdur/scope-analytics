@@ -99,7 +99,7 @@ async function main() {
 			console.log(`🏷️  Token metadata backfill: ${iTokens}/${pTokens} inserted`);
 		}
 
-		const metrics = calculateEnhancedMetrics(db, {
+		const metrics = calculateEnhancedMetrics(db, config, {
 			includeEvents: ENV.INCLUDE_EVENTS,
 			eventsLimit: ENV.EVENTS_LIMIT,
 			recentLimit: ENV.RECENT_SWAPS_LIMIT,
@@ -109,7 +109,7 @@ async function main() {
 		console.log(`  Unique Users: ${metrics.uniqueUsers.toLocaleString()}`);
 		console.log(`  Total Transactions: ${metrics.uniqueTxCount.toLocaleString()}`);
 		console.log(`  Total Swaps: ${metrics.totalSwaps.toLocaleString()}`);
-		console.log(`  Total Fees: ${metrics.totalFees_cBTC} ${config.currency.symbol}`);
+		console.log(`  Total Fees: ${metrics.totalFees} ${config.currency.symbol}`);
 		console.log(`\n  📊 Volume by Token (Top 3 Inbound):`);
 		metrics.volumeByToken.inbound.slice(0, 3).forEach((v, i) => {
 			console.log(`    ${i + 1}. ${v.token.slice(0, 10)}...`);
@@ -126,7 +126,7 @@ async function main() {
 		}
 
 		if (args.serve) {
-			startServer(db);
+			startServer(db, config);
 			await new Promise(() => {});
 		} else {
 			db.close();

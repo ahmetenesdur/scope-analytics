@@ -198,10 +198,8 @@ const metrics = await response.json();
 
 console.log(`Unique Users: ${metrics.uniqueUsers}`);
 console.log(`Total Swaps: ${metrics.totalSwaps}`);
-console.log(`Total Fees: ${metrics.totalFees_cBTC} cBTC`);
-console.log(
-	`Latest Day Fees: ${metrics.dailyStats?.[0]?.day} ${metrics.dailyStats?.[0]?.fees_cBTC} cBTC`
-);
+console.log(`Total Fees: ${metrics.totalFees}`);
+console.log(`Latest Day Fees: ${metrics.dailyStats?.[0]?.day} ${metrics.dailyStats?.[0]?.fees}`);
 console.log(`Daily swaps (tx-level): ${metrics.dailyStats?.[0]?.swapsTx}`);
 console.log(`Daily swaps (event-level): ${metrics.dailyStats?.[0]?.swapsEvent}`);
 console.log(
@@ -211,7 +209,7 @@ console.log(
 // Additional fields:
 // - metrics.volumeByToken.inbound/outbound: normalized using token decimals & symbols
 // - metrics.topTokenPairs: volumes normalized per token pair
-// - metrics.dailyStats[].fees_cBTC: daily aggregated fees in cBTC
+// - metrics.dailyStats[].fees: daily aggregated fees (formatted with symbol)
 // - metrics.dailyStats[].swapsTx: tx-level swaps per day (distinct transactions)
 // - metrics.dailyStats[].swapsEvent: event-level swaps per day (total swap events)
 // - metrics.range: { firstBlock, lastBlock, lastUpdatedAt }

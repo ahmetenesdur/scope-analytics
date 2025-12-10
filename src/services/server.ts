@@ -1,7 +1,7 @@
 import type Database from "better-sqlite3";
 import { createServer } from "node:http";
 import { ENV } from "../config/env";
-import { formatWeiToCbtc, formatAmount } from "../utils/format";
+import { formatAmount } from "../utils/format";
 
 interface SwapEventData {
 	sender: string;
@@ -30,7 +30,7 @@ interface TokenPairDetail {
 interface EnhancedMetrics {
 	uniqueUsers: number;
 	uniqueTxCount: number;
-	totalFees_cBTC: string;
+	totalFees: string;
 	totalSwaps: number;
 	volumeByToken: {
 		inbound: Array<TokenVolume>;
@@ -44,7 +44,7 @@ interface EnhancedMetrics {
 		uniqueUsers: number;
 		swapsTx: number;
 		swapsEvent: number;
-		fees_cBTC: string;
+		fees: string;
 	}>;
 	recentSwaps: Array<{
 		tx_hash: string;
@@ -61,6 +61,7 @@ interface EnhancedMetrics {
 
 export function calculateEnhancedMetrics(
 	db: Database.Database,
+	config: { currency: { decimals: number; symbol: string } },
 	options?: { includeEvents?: boolean; eventsLimit?: number; recentLimit?: number }
 ): EnhancedMetrics {
 	const uniqueUsers = db
@@ -77,7 +78,11 @@ export function calculateEnhancedMetrics(
 		.get() as {
 		total: number | null;
 	};
-	const totalFees_cBTC = formatWeiToCbtc(BigInt(Math.floor(totalFeesRow?.total ?? 0)), 6);
+	const totalFees = `${formatAmount(
+		BigInt(Math.floor(totalFeesRow?.total ?? 0)),
+		config.currency.decimals,
+		6
+	)} ${config.currency.symbol}`;
 
 	const totalSwaps = db.prepare("SELECT COUNT(*) as count FROM swap_events").get() as {
 		count: number;
@@ -212,7 +217,7 @@ export function calculateEnhancedMetrics(
 		uniqueUsers: r.uniqueUsers,
 		swapsTx: 0, // Simplified for now
 		swapsEvent: dailyEventMap.get(r.day) ?? 0,
-		fees_cBTC: formatWeiToCbtc(feesByDayMap.get(r.day) ?? 0n, 6),
+		fees: `${formatAmount(feesByDayMap.get(r.day) ?? 0n, config.currency.decimals, 6)} ${config.currency.symbol}`,
 	}));
 
 	const blockRangeRow = db
@@ -285,7 +290,7 @@ export function calculateEnhancedMetrics(
 	return {
 		uniqueUsers: uniqueUsers.count,
 		uniqueTxCount: uniqueTxCount.count,
-		totalFees_cBTC,
+		totalFees,
 		totalSwaps: totalSwaps.count,
 		volumeByToken,
 		topCallers,
@@ -297,11 +302,15 @@ export function calculateEnhancedMetrics(
 	};
 }
 
-export function startServer(db: Database.Database, port = ENV.API_PORT): void {
+export function startServer(
+	db: Database.Database,
+	config: { currency: { decimals: number; symbol: string } },
+	port = ENV.API_PORT
+): void {
 	const server = createServer((req, res) => {
 		if (req.url === "/metrics" && req.method === "GET") {
 			try {
-				const metrics = calculateEnhancedMetrics(db, {
+				const metrics = calculateEnhancedMetrics(db, config, {
 					includeEvents: ENV.INCLUDE_EVENTS,
 					eventsLimit: ENV.EVENTS_LIMIT,
 					recentLimit: ENV.RECENT_SWAPS_LIMIT,
