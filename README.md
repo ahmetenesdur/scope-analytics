@@ -12,6 +12,16 @@ High-performance, modular blockchain indexer and analytics engine for **Citrea**
 
 ## Quick Start
 
+### One-Command Setup (Recommended)
+
+Run the automated setup script to install dependencies, configure the environment, and launch the app:
+
+```bash
+./quickstart.sh
+```
+
+### Manual Setup
+
 1. **Install Dependencies**
 
     ```bash
