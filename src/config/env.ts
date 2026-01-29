@@ -14,7 +14,8 @@ export const ENV = {
 	// Citrea
 	CITREA_RPC_URL: process.env.CITREA_RPC_URL || "https://rpc.mainnet.citrea.xyz",
 	CITREA_CHAIN_ID: parseInt(process.env.CITREA_CHAIN_ID || "4114", 10),
-	CITREA_CONTRACT_ADDRESS: (process.env.CONTRACT_ADDRESS ||
+	CITREA_CONTRACT_ADDRESS: (process.env.CITREA_CONTRACT_ADDRESS ||
+		process.env.CONTRACT_ADDRESS ||
 		"0x274602a953847d807231d2370072F5f4E4594B44") as Address,
 	CITREA_DB_FILE:
 		process.env.CITREA_DATABASE_FILE || process.env.DATABASE_FILE || "citrea_cache.db",
