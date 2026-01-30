@@ -35,7 +35,7 @@ export const NETWORKS: Record<string, NetworkConfig> = {
 		dbFile: ENV.MONAD_DB_FILE,
 		abi: monadRouterAbi,
 		explorer: "https://monad.explorer",
-		currency: { name: "MON", symbol: "MON", decimals: 18 },
+		currency: { name: "Monad", symbol: "MON", decimals: 18 },
 	},
 };
 

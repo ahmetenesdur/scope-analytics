@@ -21,8 +21,7 @@ export const ENV = {
 		process.env.CITREA_DATABASE_FILE || process.env.DATABASE_FILE || "citrea_cache.db",
 
 	// Monad
-	MONAD_RPC_URL:
-		process.env.MONAD_RPC_URL || "https://monad-mainnet.g.alchemy.com/v2/ubLyP3qQTT3fXxF0yD4Z2",
+	MONAD_RPC_URL: process.env.MONAD_RPC_URL || "https://rpc1.monad.xyz",
 	MONAD_CHAIN_ID: parseInt(process.env.MONAD_CHAIN_ID || "143", 10),
 	MONAD_CONTRACT_ADDRESS: (process.env.MONAD_CONTRACT_ADDRESS ||
 		"0x274602a953847d807231d2370072f5f4e4594b44") as Address,
