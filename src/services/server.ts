@@ -28,27 +28,27 @@ interface TokenPairDetail {
 }
 
 interface EnhancedMetrics {
-	uniqueUsers: number;
-	uniqueTxCount: number;
+	totalUsers: number;
+	totalTxCount: number;
 	totalFees: string;
 	totalSwaps: number;
 	volumeByToken: {
 		inbound: Array<TokenVolume>;
 		outbound: Array<TokenVolume>;
 	};
-	topCallers: Array<{ addr: string; count: number }>;
+	topCallers: Array<{ address: string; txCount: number }>;
 	topTokenPairs: Array<TokenPairDetail>;
 	dailyStats: Array<{
 		day: string;
-		tx: number;
-		uniqueUsers: number;
-		swapsTx: number;
-		swapsEvent: number;
+		txCount: number;
+		totalUsers: number;
+		swapTxCount: number;
+		swapEventCount: number;
 		fees: string;
 	}>;
 	recentSwaps: Array<{
 		tx_hash: string;
-		time: string;
+		timestamp: string;
 		sender: string;
 		tokenIn: string;
 		tokenOut: string;
@@ -56,11 +56,11 @@ interface EnhancedMetrics {
 		amountOut: string;
 	}>;
 	swapEvents?: Array<SwapEventData>;
-	range: { firstBlock: number | null; lastBlock: number | null; lastUpdatedAt: string | null };
+	range: { startBlock: number | null; endBlock: number | null; lastUpdatedAt: string | null };
 	executionQuality: {
 		averageMargin: string;
-		riskyCount: number;
-		safeCount: number;
+		riskySwapCount: number;
+		safeSwapCount: number;
 	};
 }
 
@@ -69,12 +69,12 @@ export function calculateEnhancedMetrics(
 	config: { currency: { decimals: number; symbol: string } },
 	options?: { includeEvents?: boolean; eventsLimit?: number; recentLimit?: number }
 ): EnhancedMetrics {
-	const uniqueUsers = db
+	const totalUsers = db
 		.prepare("SELECT COUNT(DISTINCT from_address) as count FROM logs")
 		.get() as {
 		count: number;
 	};
-	const uniqueTxCount = db.prepare("SELECT COUNT(DISTINCT tx_hash) as count FROM logs").get() as {
+	const totalTxCount = db.prepare("SELECT COUNT(DISTINCT tx_hash) as count FROM logs").get() as {
 		count: number;
 	};
 
@@ -140,9 +140,9 @@ export function calculateEnhancedMetrics(
 
 	const topCallers = db
 		.prepare(
-			`SELECT from_address as addr, COUNT(*) as count FROM logs GROUP BY from_address ORDER BY count DESC LIMIT 10`
+			`SELECT from_address as address, COUNT(*) as txCount FROM logs GROUP BY from_address ORDER BY txCount DESC LIMIT 10`
 		)
-		.all() as Array<{ addr: string; count: number }>;
+		.all() as Array<{ address: string; txCount: number }>;
 
 	const topPairsRows = db
 		.prepare(
@@ -180,13 +180,13 @@ export function calculateEnhancedMetrics(
 		.prepare(
 			`SELECT 
         strftime('%Y-%m-%d', timestamp, 'unixepoch') as day,
-        COUNT(*) as tx,
-        COUNT(DISTINCT from_address) as uniqueUsers
+        COUNT(*) as txCount,
+        COUNT(DISTINCT from_address) as totalUsers
       FROM logs
       GROUP BY day
       ORDER BY day DESC`
 		)
-		.all() as Array<{ day: string; tx: number; uniqueUsers: number }>;
+		.all() as Array<{ day: string; txCount: number; totalUsers: number }>;
 
 	const dailyFeesRows = db
 		.prepare(
@@ -206,35 +206,35 @@ export function calculateEnhancedMetrics(
 	const dailyStatsEventRows = db
 		.prepare(
 			`SELECT strftime('%Y-%m-%d', s.timestamp, 'unixepoch') AS day,
-                    COUNT(*) AS swapsEvent
+                    COUNT(*) AS swapEventCount
              FROM swap_events s
              GROUP BY day
              ORDER BY day DESC`
 		)
-		.all() as Array<{ day: string; swapsEvent: number }>;
+		.all() as Array<{ day: string; swapEventCount: number }>;
 	const dailyEventMap = new Map<string, number>(
-		dailyStatsEventRows.map((r) => [r.day, r.swapsEvent ?? 0])
+		dailyStatsEventRows.map((r) => [r.day, r.swapEventCount ?? 0])
 	);
 
 	const dailyStatsTxRows = db
 		.prepare(
 			`SELECT strftime('%Y-%m-%d', s.timestamp, 'unixepoch') AS day,
-                    COUNT(DISTINCT tx_hash) AS swapsTx
+                    COUNT(DISTINCT tx_hash) AS swapTxCount
              FROM swap_events s
              GROUP BY day
              ORDER BY day DESC`
 		)
-		.all() as Array<{ day: string; swapsTx: number }>;
+		.all() as Array<{ day: string; swapTxCount: number }>;
 	const dailyTxMap = new Map<string, number>(
-		dailyStatsTxRows.map((r) => [r.day, r.swapsTx ?? 0])
+		dailyStatsTxRows.map((r) => [r.day, r.swapTxCount ?? 0])
 	);
 
 	const dailyStats = dailyStatsRows.map((r) => ({
 		day: r.day,
-		tx: r.tx,
-		uniqueUsers: r.uniqueUsers,
-		swapsTx: dailyTxMap.get(r.day) ?? 0,
-		swapsEvent: dailyEventMap.get(r.day) ?? 0,
+		txCount: r.txCount,
+		totalUsers: r.totalUsers,
+		swapTxCount: dailyTxMap.get(r.day) ?? 0,
+		swapEventCount: dailyEventMap.get(r.day) ?? 0,
 		fees: `${formatAmount(feesByDayMap.get(r.day) ?? 0n, config.currency.decimals, 6)} ${config.currency.symbol}`,
 	}));
 
@@ -245,8 +245,8 @@ export function calculateEnhancedMetrics(
 		last_ts: number | null;
 	};
 	const range = {
-		firstBlock: blockRangeRow?.first ?? null,
-		lastBlock: blockRangeRow?.last ?? null,
+		startBlock: blockRangeRow?.first ?? null,
+		endBlock: blockRangeRow?.last ?? null,
 		lastUpdatedAt: lastTsRow?.last_ts ? new Date(lastTsRow.last_ts * 1000).toISOString() : null,
 	};
 
@@ -293,10 +293,10 @@ export function calculateEnhancedMetrics(
 		const symOut = symbolMap.get(r.token_out.toLowerCase()) ?? "";
 		const amountInNorm = `${formatAmount(BigInt(r.amount_in), decIn, 6)}${symIn ? ` (${symIn})` : ""}`;
 		const amountOutNorm = `${formatAmount(BigInt(r.amount_out), decOut, 6)}${symOut ? ` (${symOut})` : ""}`;
-		const time = new Date(r.timestamp * 1000).toISOString();
+		const timestamp = new Date(r.timestamp * 1000).toISOString();
 		return {
 			tx_hash: r.tx_hash,
-			time,
+			timestamp,
 			sender: r.sender,
 			tokenIn: r.token_in,
 			tokenOut: r.token_out,
@@ -320,12 +320,12 @@ export function calculateEnhancedMetrics(
 		.get() as { total: number; avgQuality: number | null; riskyCount: number | null };
 
 	const avgQuality = slippageStats.avgQuality ?? 0;
-	const riskyCount = slippageStats.riskyCount ?? 0;
-	const safeCount = (slippageStats.total ?? 0) - riskyCount;
+	const riskySwapCount = slippageStats.riskyCount ?? 0;
+	const safeSwapCount = (slippageStats.total ?? 0) - riskySwapCount;
 
 	return {
-		uniqueUsers: uniqueUsers.count,
-		uniqueTxCount: uniqueTxCount.count,
+		totalUsers: totalUsers.count,
+		totalTxCount: totalTxCount.count,
 		totalFees,
 		totalSwaps: totalSwaps.count,
 		volumeByToken,
@@ -337,8 +337,8 @@ export function calculateEnhancedMetrics(
 		range,
 		executionQuality: {
 			averageMargin: `${avgQuality.toFixed(2)}%`,
-			riskyCount,
-			safeCount,
+			riskySwapCount,
+			safeSwapCount,
 		},
 	};
 }

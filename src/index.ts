@@ -165,8 +165,8 @@ async function main() {
 			const metrics = await runPipeline(db, config, args);
 
 			console.log("\n[Analytics] Analytics Summary:");
-			console.log(`  Unique Users: ${metrics.uniqueUsers.toLocaleString()}`);
-			console.log(`  Total Transactions: ${metrics.uniqueTxCount.toLocaleString()}`);
+			console.log(`  Total Users: ${metrics.totalUsers.toLocaleString()}`);
+			console.log(`  Total Transactions: ${metrics.totalTxCount.toLocaleString()}`);
 			console.log(`  Total Swaps: ${metrics.totalSwaps.toLocaleString()}`);
 			console.log(`  Total Fees: ${metrics.totalFees}`);
 			console.log(`\n  [Volume] Volume by Token (Top 3 Inbound):`);

@@ -24,8 +24,8 @@ importers:
                 specifier: ^7.6.13
                 version: 7.6.13
             "@types/node":
-                specifier: ^25.1.0
-                version: 25.1.0
+                specifier: ^25.2.0
+                version: 25.2.0
             "@types/prompts":
                 specifier: ^2.4.9
                 version: 2.4.9
@@ -325,10 +325,10 @@ packages:
                 integrity: sha512-NMv9ASNARoKksWtsq/SHakpYAYnhBrQgGD8zkLYk/jaK8jUGn08CfEdTRgYhMypUQAfzSP8W6gNLe0q19/t4VA==,
             }
 
-    "@types/node@25.1.0":
+    "@types/node@25.2.0":
         resolution:
             {
-                integrity: sha512-t7frlewr6+cbx+9Ohpl0NOTKXZNV9xHRmNOvql47BFJKcEG1CxtxlPEEe+gR9uhVWM4DwhnvTF110mIL4yP9RA==,
+                integrity: sha512-DZ8VwRFUNzuqJ5khrvwMXHmvPe+zGayJhr2CDNiKB1WBE1ST8Djl00D0IC4vvNmHMdj6DlbYRIaFE7WHjlDl5w==,
             }
 
     "@types/prompts@2.4.9":
@@ -463,10 +463,10 @@ packages:
         engines: { node: ^8.16.0 || ^10.6.0 || >=11.0.0 }
         os: [darwin]
 
-    get-tsconfig@4.13.0:
+    get-tsconfig@4.13.1:
         resolution:
             {
-                integrity: sha512-1VKTZJCwBrvbd+Wn3AOgQP/2Av+TfTCOlE4AcRJE72W1ksZXbAx8PPBR9RzgTeSPzlPMHrbANMH3LbltH73wxQ==,
+                integrity: sha512-EoY1N2xCn44xU6750Sx7OjOIT59FkmstNc3X6y5xpz7D5cBtZRe/3pSlTkDJgqsOk3WwZPkWfonhhUJfttQo3w==,
             }
 
     github-from-package@0.0.0:
@@ -834,15 +834,15 @@ snapshots:
 
     "@types/better-sqlite3@7.6.13":
         dependencies:
-            "@types/node": 25.1.0
+            "@types/node": 25.2.0
 
-    "@types/node@25.1.0":
+    "@types/node@25.2.0":
         dependencies:
             undici-types: 7.16.0
 
     "@types/prompts@2.4.9":
         dependencies:
-            "@types/node": 25.1.0
+            "@types/node": 25.2.0
             kleur: 3.0.3
 
     abitype@1.2.3(typescript@5.9.3):
@@ -927,7 +927,7 @@ snapshots:
     fsevents@2.3.3:
         optional: true
 
-    get-tsconfig@4.13.0:
+    get-tsconfig@4.13.1:
         dependencies:
             resolve-pkg-maps: 1.0.0
 
@@ -1056,7 +1056,7 @@ snapshots:
     tsx@4.21.0:
         dependencies:
             esbuild: 0.27.2
-            get-tsconfig: 4.13.0
+            get-tsconfig: 4.13.1
         optionalDependencies:
             fsevents: 2.3.3
 
