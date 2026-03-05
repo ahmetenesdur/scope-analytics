@@ -13,138 +13,131 @@ interface SwapEventData {
 }
 
 interface TokenVolume {
-	token: string;
-	totalAmount: string;
-	normalizedAmount: string;
+	contractAddress: string;
+	rawAmount: string;
+	formattedAmount: string;
+	volumeUsd: string;
 	swapCount: number;
 }
 
 interface TokenPairDetail {
-	tokenIn: string;
-	tokenOut: string;
+	tokenInAddress: string;
+	tokenOutAddress: string;
 	swapCount: number;
 	volumeIn: string;
 	volumeOut: string;
+	totalVolumeUsd: string;
 }
 
 interface EnhancedMetrics {
-	totalUsers: number;
-	totalTxCount: number;
-	totalFees: string;
-	totalSwaps: number;
-	volumeByToken: {
-		inbound: Array<TokenVolume>;
-		outbound: Array<TokenVolume>;
+	uniqueActiveAddresses: number;
+	totalTransactions: number;
+	cumulativeNetworkFees: string;
+	averageTransactionFee: string;
+	totalSwapEvents: number;
+	tokenMetrics: {
+		liquidityIn: Array<TokenVolume>;
+		liquidityOut: Array<TokenVolume>;
 	};
-	topCallers: Array<{ address: string; txCount: number }>;
-	topTokenPairs: Array<TokenPairDetail>;
-	dailyStats: Array<{
-		day: string;
+	topInteractingAddresses: Array<{ address: string; txCount: number }>;
+	topTradingPairs: Array<TokenPairDetail>;
+	historicalDailyMetrics: Array<{
+		date: string;
 		txCount: number;
-		totalUsers: number;
-		swapTxCount: number;
+		uniqueActiveAddresses: number;
+		transactionsWithSwaps: number;
 		swapEventCount: number;
 		fees: string;
+		averageFeePerTx: string;
+		volumeUsd: string;
 	}>;
-	recentSwaps: Array<{
+	latestSwapEvents: Array<{
 		tx_hash: string;
 		timestamp: string;
 		sender: string;
-		tokenIn: string;
-		tokenOut: string;
+		tokenInAddress: string;
+		tokenOutAddress: string;
 		amountIn: string;
 		amountOut: string;
 	}>;
 	swapEvents?: Array<SwapEventData>;
 	range: { startBlock: number | null; endBlock: number | null; lastUpdatedAt: string | null };
 	executionQuality: {
-		averageMargin: string;
-		riskySwapCount: number;
-		safeSwapCount: number;
+		averageSlippageMargin: string;
+		highSlippageSwaps: number;
+		standardSlippageSwaps: number;
 	};
+	cumulativeVolumeUsd: string;
 }
 
-export function calculateEnhancedMetrics(
-	db: Database.Database,
-	config: { currency: { decimals: number; symbol: string } },
-	options?: { includeEvents?: boolean; eventsLimit?: number; recentLimit?: number }
-): EnhancedMetrics {
-	const totalUsers = db
-		.prepare("SELECT COUNT(DISTINCT from_address) as count FROM logs")
-		.get() as {
-		count: number;
-	};
-	const totalTxCount = db.prepare("SELECT COUNT(DISTINCT tx_hash) as count FROM logs").get() as {
-		count: number;
-	};
+// Metrics Calculation Helpers
 
-	const totalFeesRow = db
-		.prepare("SELECT SUM(CAST(fee_wei AS REAL)) as total FROM fees")
-		.get() as {
-		total: number | null;
-	};
-	const totalFees = `${formatAmount(
-		BigInt(Math.floor(totalFeesRow?.total ?? 0)),
-		config.currency.decimals,
-		6
-	)} ${config.currency.symbol}`;
-
-	const totalSwaps = db.prepare("SELECT COUNT(*) as count FROM swap_events").get() as {
-		count: number;
-	};
-
-	const tokenMetaRows = db
-		.prepare("SELECT address, decimals, symbol FROM token_metadata")
-		.all() as Array<{ address: string; decimals: number; symbol: string }>;
+function getDecimalsAndSymbols(db: Database.Database) {
+	const rows = db.prepare("SELECT address, decimals, symbol FROM token_metadata").all() as Array<{
+		address: string;
+		decimals: number;
+		symbol: string;
+	}>;
 	const decimalsMap = new Map<string, number>();
 	const symbolMap = new Map<string, string>();
-	for (const r of tokenMetaRows) {
-		decimalsMap.set(r.address.toLowerCase(), r.decimals);
-		symbolMap.set(r.address.toLowerCase(), r.symbol);
+	for (const r of rows) {
+		const addr = r.address.toLowerCase();
+		decimalsMap.set(addr, r.decimals);
+		symbolMap.set(addr, r.symbol);
 	}
+	return { decimalsMap, symbolMap };
+}
 
-	const inboundVolumeRows = db
-		.prepare(
-			`SELECT token_in, SUM(CAST(amount_in AS REAL)) as total, COUNT(*) as cnt FROM swap_events GROUP BY token_in ORDER BY cnt DESC`
-		)
-		.all() as Array<{ token_in: string; total: number; cnt: number }>;
+function getPrices(db: Database.Database) {
+	const rows = db.prepare("SELECT address, price_usd FROM token_prices").all() as Array<{
+		address: string;
+		price_usd: number;
+	}>;
+	const priceMap = new Map<string, number>();
+	for (const r of rows) {
+		priceMap.set(r.address.toLowerCase(), r.price_usd);
+	}
+	return priceMap;
+}
 
-	const outboundVolumeRows = db
-		.prepare(
-			`SELECT token_out, SUM(CAST(amount_out AS REAL)) as total, COUNT(*) as cnt FROM swap_events GROUP BY token_out ORDER BY cnt DESC`
-		)
-		.all() as Array<{ token_out: string; total: number; cnt: number }>;
+function formatVolumeData(
+	rows: Array<{ token_in?: string; token_out?: string; total: number; cnt: number }>,
+	isOut: boolean,
+	decimalsMap: Map<string, number>,
+	symbolMap: Map<string, string>,
+	priceMap: Map<string, number>
+): TokenVolume[] {
+	return rows.map((r) => {
+		const token = (isOut ? r.token_out : r.token_in) ?? "";
+		const addr = token.toLowerCase();
+		const dec = decimalsMap.get(addr) ?? 18;
+		const sym = symbolMap.get(addr) ?? "";
+		const price = priceMap.get(addr);
+		const raw = BigInt(Math.floor(r.total));
+		const normalized = Number(raw) / 10 ** dec;
 
-	const formatVolume = (
-		rows: Array<{ token_in?: string; token_out?: string; total: number; cnt: number }>,
-		isOut: boolean
-	): TokenVolume[] => {
-		return rows.map((r) => {
-			const token = (isOut ? r.token_out : r.token_in) ?? "";
-			const dec = decimalsMap.get(token.toLowerCase()) ?? 18;
-			const sym = symbolMap.get(token.toLowerCase()) ?? "";
-			const raw = BigInt(Math.floor(r.total));
-			return {
-				token,
-				totalAmount: raw.toString(),
-				normalizedAmount: `${formatAmount(raw, dec, 2)} ${sym}`,
-				swapCount: r.cnt,
-			};
-		});
-	};
+		let volumeUsd = "N/A";
+		if (price !== undefined) {
+			volumeUsd = `$${(normalized * price).toFixed(2)}`;
+		}
 
-	const volumeByToken = {
-		inbound: formatVolume(inboundVolumeRows, false),
-		outbound: formatVolume(outboundVolumeRows, true),
-	};
+		return {
+			contractAddress: token,
+			rawAmount: raw.toString(),
+			formattedAmount: `${formatAmount(raw, dec, 2)} ${sym}`,
+			volumeUsd,
+			swapCount: r.cnt,
+		};
+	});
+}
 
-	const topCallers = db
-		.prepare(
-			`SELECT from_address as address, COUNT(*) as txCount FROM logs GROUP BY from_address ORDER BY txCount DESC LIMIT 10`
-		)
-		.all() as Array<{ address: string; txCount: number }>;
-
-	const topPairsRows = db
+function getTopTokenPairs(
+	db: Database.Database,
+	decimalsMap: Map<string, number>,
+	symbolMap: Map<string, string>,
+	priceMap: Map<string, number>
+): TokenPairDetail[] {
+	const rows = db
 		.prepare(
 			`SELECT token_in, token_out, COUNT(*) as cnt, 
               SUM(CAST(amount_in AS REAL)) as volIn, 
@@ -162,191 +155,239 @@ export function calculateEnhancedMetrics(
 		volOut: number;
 	}>;
 
-	const topTokenPairs: TokenPairDetail[] = topPairsRows.map((r) => {
-		const decIn = decimalsMap.get(r.token_in.toLowerCase()) ?? 18;
-		const decOut = decimalsMap.get(r.token_out.toLowerCase()) ?? 18;
-		const symIn = symbolMap.get(r.token_in.toLowerCase()) ?? "";
-		const symOut = symbolMap.get(r.token_out.toLowerCase()) ?? "";
+	return rows.map((r) => {
+		const addrIn = r.token_in.toLowerCase();
+		const addrOut = r.token_out.toLowerCase();
+		const decIn = decimalsMap.get(addrIn) ?? 18;
+		const decOut = decimalsMap.get(addrOut) ?? 18;
+		const symIn = symbolMap.get(addrIn) ?? "";
+		const symOut = symbolMap.get(addrOut) ?? "";
+		const priceIn = priceMap.get(addrIn);
+
+		let totalVolumeUsd = "N/A";
+		if (priceIn !== undefined) {
+			const volInUsd = (r.volIn / 10 ** decIn) * priceIn;
+			totalVolumeUsd = `$${volInUsd.toFixed(2)}`;
+		}
+
 		return {
-			tokenIn: r.token_in,
-			tokenOut: r.token_out,
+			tokenInAddress: r.token_in,
+			tokenOutAddress: r.token_out,
 			swapCount: r.cnt,
 			volumeIn: `${formatAmount(BigInt(Math.floor(r.volIn)), decIn, 2)} ${symIn}`,
 			volumeOut: `${formatAmount(BigInt(Math.floor(r.volOut)), decOut, 2)} ${symOut}`,
+			totalVolumeUsd,
 		};
 	});
+}
 
-	const dailyStatsRows = db
+function getDailyStats(
+	db: Database.Database,
+	decimalsMap: Map<string, number>,
+	priceMap: Map<string, number>,
+	config: { currency: { decimals: number; symbol: string } }
+) {
+	const statsRows = db
 		.prepare(
-			`SELECT 
-        strftime('%Y-%m-%d', timestamp, 'unixepoch') as day,
-        COUNT(*) as txCount,
-        COUNT(DISTINCT from_address) as totalUsers
-      FROM logs
-      GROUP BY day
-      ORDER BY day DESC`
+			`SELECT strftime('%Y-%m-%d', timestamp, 'unixepoch') as day, COUNT(*) as txCount, COUNT(DISTINCT from_address) as totalUsers FROM logs GROUP BY day ORDER BY day DESC`
 		)
 		.all() as Array<{ day: string; txCount: number; totalUsers: number }>;
 
-	const dailyFeesRows = db
+	const feesRows = db
 		.prepare(
-			`SELECT 
-        strftime('%Y-%m-%d', l.timestamp, 'unixepoch') as day,
-        SUM(CAST(f.fee_wei AS REAL)) as fees
-      FROM logs l
-      JOIN fees f ON l.tx_hash = f.tx_hash
-      GROUP BY day`
+			`SELECT strftime('%Y-%m-%d', l.timestamp, 'unixepoch') as day, SUM(CAST(f.fee_wei AS REAL)) as fees FROM logs l JOIN fees f ON l.tx_hash = f.tx_hash GROUP BY day`
 		)
 		.all() as Array<{ day: string; fees: number }>;
-	const feesByDayMap = new Map<string, bigint>();
-	for (const r of dailyFeesRows) {
-		feesByDayMap.set(r.day, BigInt(Math.floor(r.fees)));
-	}
 
-	const dailyStatsEventRows = db
+	const feesMap = new Map(feesRows.map((r) => [r.day, BigInt(Math.floor(r.fees))]));
+
+	const eventRows = db
 		.prepare(
-			`SELECT strftime('%Y-%m-%d', s.timestamp, 'unixepoch') AS day,
-                    COUNT(*) AS swapEventCount
-             FROM swap_events s
-             GROUP BY day
-             ORDER BY day DESC`
+			`SELECT strftime('%Y-%m-%d', timestamp, 'unixepoch') as day, COUNT(*) as swapEventCount FROM swap_events GROUP BY day`
 		)
 		.all() as Array<{ day: string; swapEventCount: number }>;
-	const dailyEventMap = new Map<string, number>(
-		dailyStatsEventRows.map((r) => [r.day, r.swapEventCount ?? 0])
-	);
+	const eventMap = new Map(eventRows.map((r) => [r.day, r.swapEventCount]));
 
-	const dailyStatsTxRows = db
+	const volumeRows = db
 		.prepare(
-			`SELECT strftime('%Y-%m-%d', s.timestamp, 'unixepoch') AS day,
-                    COUNT(DISTINCT tx_hash) AS swapTxCount
-             FROM swap_events s
-             GROUP BY day
-             ORDER BY day DESC`
+			`SELECT strftime('%Y-%m-%d', timestamp, 'unixepoch') as day, COUNT(DISTINCT tx_hash) as swapTxCount, SUM(CAST(amount_in AS REAL)) as totalIn, token_in FROM swap_events GROUP BY day, token_in`
 		)
-		.all() as Array<{ day: string; swapTxCount: number }>;
-	const dailyTxMap = new Map<string, number>(
-		dailyStatsTxRows.map((r) => [r.day, r.swapTxCount ?? 0])
-	);
+		.all() as Array<{ day: string; swapTxCount: number; totalIn: number; token_in: string }>;
 
-	const dailyStats = dailyStatsRows.map((r) => ({
-		day: r.day,
-		txCount: r.txCount,
-		totalUsers: r.totalUsers,
-		swapTxCount: dailyTxMap.get(r.day) ?? 0,
-		swapEventCount: dailyEventMap.get(r.day) ?? 0,
-		fees: `${formatAmount(feesByDayMap.get(r.day) ?? 0n, config.currency.decimals, 6)} ${config.currency.symbol}`,
-	}));
+	const dailyVolumeUsdMap = new Map<string, number>();
+	const dailySwapTxMap = new Map<string, number>();
 
+	for (const r of volumeRows) {
+		dailySwapTxMap.set(r.day, (dailySwapTxMap.get(r.day) ?? 0) + r.swapTxCount);
+		const dec = decimalsMap.get(r.token_in.toLowerCase()) ?? 18;
+		const price = priceMap.get(r.token_in.toLowerCase());
+		if (price !== undefined) {
+			const usd = (r.totalIn / 10 ** dec) * price;
+			dailyVolumeUsdMap.set(r.day, (dailyVolumeUsdMap.get(r.day) ?? 0) + usd);
+		}
+	}
+
+	return statsRows.map((r) => {
+		const vol = dailyVolumeUsdMap.get(r.day);
+		const dayFees = feesMap.get(r.day) ?? 0n;
+		const avgFee = r.txCount > 0 ? dayFees / BigInt(r.txCount) : 0n;
+
+		return {
+			date: r.day,
+			txCount: r.txCount,
+			uniqueActiveAddresses: r.totalUsers,
+			transactionsWithSwaps: dailySwapTxMap.get(r.day) ?? 0,
+			swapEventCount: eventMap.get(r.day) ?? 0,
+			fees: `${formatAmount(dayFees, config.currency.decimals, 6)} ${config.currency.symbol}`,
+			averageFeePerTx: `${formatAmount(avgFee, config.currency.decimals, 6)} ${config.currency.symbol}`,
+			volumeUsd: vol !== undefined ? `$${vol.toFixed(2)}` : "N/A",
+		};
+	});
+}
+
+export function calculateEnhancedMetrics(
+	db: Database.Database,
+	config: { currency: { decimals: number; symbol: string } },
+	options?: { includeEvents?: boolean; eventsLimit?: number; recentLimit?: number }
+): EnhancedMetrics {
+	// 1. Basic Counts
+	const totalUsers = (
+		db.prepare("SELECT COUNT(DISTINCT from_address) as count FROM logs").get() as any
+	).count;
+	const totalTxCount = (
+		db.prepare("SELECT COUNT(DISTINCT tx_hash) as count FROM logs").get() as any
+	).count;
+	const totalSwaps = (db.prepare("SELECT COUNT(*) as count FROM swap_events").get() as any).count;
+
+	const totalFeesRow = db
+		.prepare("SELECT SUM(CAST(fee_wei AS REAL)) as total FROM fees")
+		.get() as any;
+	const totalFeesRaw = BigInt(Math.floor(totalFeesRow?.total ?? 0));
+	const totalFees = `${formatAmount(totalFeesRaw, config.currency.decimals, 6)} ${config.currency.symbol}`;
+	const avgFeeRaw = totalTxCount > 0 ? totalFeesRaw / BigInt(totalTxCount) : 0n;
+	const averageFeePerTx = `${formatAmount(avgFeeRaw, config.currency.decimals, 6)} ${config.currency.symbol}`;
+
+	// 2. Metadata & Prices
+	const { decimalsMap, symbolMap } = getDecimalsAndSymbols(db);
+	const priceMap = getPrices(db);
+
+	// 3. Volume Analysis
+	const inboundVolumeRows = db
+		.prepare(
+			`SELECT token_in, SUM(CAST(amount_in AS REAL)) as total, COUNT(*) as cnt FROM swap_events GROUP BY token_in ORDER BY cnt DESC`
+		)
+		.all() as any;
+	const outboundVolumeRows = db
+		.prepare(
+			`SELECT token_out, SUM(CAST(amount_out AS REAL)) as total, COUNT(*) as cnt FROM swap_events GROUP BY token_out ORDER BY cnt DESC`
+		)
+		.all() as any;
+
+	const tokenMetrics = {
+		liquidityIn: formatVolumeData(inboundVolumeRows, false, decimalsMap, symbolMap, priceMap),
+		liquidityOut: formatVolumeData(outboundVolumeRows, true, decimalsMap, symbolMap, priceMap),
+	};
+
+	let totalVolumeUsdValue: number | null = null;
+	inboundVolumeRows.forEach((r: any) => {
+		const dec = decimalsMap.get(r.token_in.toLowerCase()) ?? 18;
+		const price = priceMap.get(r.token_in.toLowerCase());
+		if (price !== undefined) {
+			if (totalVolumeUsdValue === null) totalVolumeUsdValue = 0;
+			totalVolumeUsdValue += (r.total / 10 ** dec) * price;
+		}
+	});
+
+	// 4. Leaders & Pairs
+	const topCallers = db
+		.prepare(
+			`SELECT from_address as address, COUNT(*) as txCount FROM logs GROUP BY from_address ORDER BY txCount DESC LIMIT 10`
+		)
+		.all() as any;
+	const topTokenPairs = getTopTokenPairs(db, decimalsMap, symbolMap, priceMap);
+
+	// 5. Time-series Stats
+	const dailyStats = getDailyStats(db, decimalsMap, priceMap, config);
+
+	// 6. Block Range
 	const blockRangeRow = db
 		.prepare("SELECT MIN(block_number) as first, MAX(block_number) as last FROM logs")
-		.get() as { first: number | null; last: number | null };
-	const lastTsRow = db.prepare("SELECT MAX(timestamp) as last_ts FROM logs").get() as {
-		last_ts: number | null;
-	};
+		.get() as any;
+	const lastTsRow = db.prepare("SELECT MAX(timestamp) as last_ts FROM logs").get() as any;
 	const range = {
 		startBlock: blockRangeRow?.first ?? null,
 		endBlock: blockRangeRow?.last ?? null,
 		lastUpdatedAt: lastTsRow?.last_ts ? new Date(lastTsRow.last_ts * 1000).toISOString() : null,
 	};
 
-	const includeEvents = options?.includeEvents ?? false;
-	const eventsLimit = options?.eventsLimit ?? 10;
+	// 7. Recent Swaps
 	const recentLimit = options?.recentLimit ?? 10;
-
-	const swapEvents = includeEvents
-		? (db
-				.prepare(
-					`
-    SELECT sender, amount_in, amount_out, token_in, token_out, destination
-    FROM swap_events
-    ORDER BY block_number DESC, log_index DESC
-    LIMIT ?
-  `
-				)
-				.all(eventsLimit) as Array<SwapEventData>)
-		: undefined;
-
 	const recentRows = db
 		.prepare(
-			`
-    SELECT tx_hash, timestamp, sender, amount_in, amount_out, token_in, token_out
-    FROM swap_events
-    ORDER BY block_number DESC, log_index DESC
-    LIMIT ?
-  `
+			`SELECT tx_hash, timestamp, sender, amount_in, amount_out, token_in, token_out FROM swap_events ORDER BY block_number DESC, log_index DESC LIMIT ?`
 		)
-		.all(recentLimit) as Array<{
-		tx_hash: string;
-		timestamp: number;
-		sender: string;
-		amount_in: string;
-		amount_out: string;
-		token_in: string;
-		token_out: string;
-	}>;
+		.all(recentLimit) as any;
 
-	const recentSwaps = recentRows.map((r) => {
-		const decIn = decimalsMap.get(r.token_in.toLowerCase()) ?? 18;
-		const decOut = decimalsMap.get(r.token_out.toLowerCase()) ?? 18;
-		const symIn = symbolMap.get(r.token_in.toLowerCase()) ?? "";
-		const symOut = symbolMap.get(r.token_out.toLowerCase()) ?? "";
-		const amountInNorm = `${formatAmount(BigInt(r.amount_in), decIn, 6)}${symIn ? ` (${symIn})` : ""}`;
-		const amountOutNorm = `${formatAmount(BigInt(r.amount_out), decOut, 6)}${symOut ? ` (${symOut})` : ""}`;
+	const recentSwaps = recentRows.map((r: any) => {
+		const addrIn = r.token_in.toLowerCase();
+		const addrOut = r.token_out.toLowerCase();
 		const timestamp = new Date(r.timestamp * 1000).toISOString();
 		return {
 			tx_hash: r.tx_hash,
 			timestamp,
 			sender: r.sender,
-			tokenIn: r.token_in,
-			tokenOut: r.token_out,
-			amountIn: amountInNorm,
-			amountOut: amountOutNorm,
+			tokenInAddress: r.token_in,
+			tokenOutAddress: r.token_out,
+			amountIn: `${formatAmount(BigInt(r.amount_in), decimalsMap.get(addrIn) ?? 18, 6)}${symbolMap.get(addrIn) ? ` (${symbolMap.get(addrIn)})` : ""}`,
+			amountOut: `${formatAmount(BigInt(r.amount_out), decimalsMap.get(addrOut) ?? 18, 6)}${symbolMap.get(addrOut) ? ` (${symbolMap.get(addrOut)})` : ""}`,
 		};
 	});
 
-	// Slippage Analysis
+	// 8. Slippage
 	const slippageStats = db
 		.prepare(
-			`
-    SELECT 
-      COUNT(*) as total,
-      AVG(execution_quality) as avgQuality,
-      SUM(CASE WHEN execution_quality < 0.5 THEN 1 ELSE 0 END) as riskyCount
-    FROM swap_events
-    WHERE execution_quality IS NOT NULL
-  `
+			`SELECT COUNT(*) as total, AVG(execution_quality) as avgQuality, SUM(CASE WHEN execution_quality < 0.5 THEN 1 ELSE 0 END) as riskyCount FROM swap_events WHERE execution_quality IS NOT NULL`
 		)
-		.get() as { total: number; avgQuality: number | null; riskyCount: number | null };
+		.get() as any;
 
-	const avgQuality = slippageStats.avgQuality ?? 0;
-	const riskySwapCount = slippageStats.riskyCount ?? 0;
-	const safeSwapCount = (slippageStats.total ?? 0) - riskySwapCount;
+	const avgQuality = slippageStats?.avgQuality ?? 0;
+	const riskyCount = slippageStats?.riskyCount ?? 0;
 
 	return {
-		totalUsers: totalUsers.count,
-		totalTxCount: totalTxCount.count,
-		totalFees,
-		totalSwaps: totalSwaps.count,
-		volumeByToken,
-		topCallers,
-		topTokenPairs,
-		dailyStats,
-		recentSwaps,
-		...(includeEvents && swapEvents ? { swapEvents } : {}),
+		uniqueActiveAddresses: totalUsers,
+		totalTransactions: totalTxCount,
+		cumulativeNetworkFees: totalFees,
+		averageTransactionFee: averageFeePerTx,
+		totalSwapEvents: totalSwaps,
+		tokenMetrics,
+		topInteractingAddresses: topCallers,
+		topTradingPairs: topTokenPairs,
+		historicalDailyMetrics: dailyStats,
+		latestSwapEvents: recentSwaps,
 		range,
 		executionQuality: {
-			averageMargin: `${avgQuality.toFixed(2)}%`,
-			riskySwapCount,
-			safeSwapCount,
+			averageSlippageMargin: `${Number(avgQuality).toFixed(2)}%`,
+			highSlippageSwaps: Number(riskyCount),
+			standardSlippageSwaps: Number(slippageStats?.total ?? 0) - Number(riskyCount),
 		},
+		cumulativeVolumeUsd:
+			totalVolumeUsdValue !== null ? `$${(totalVolumeUsdValue as number).toFixed(2)}` : "N/A",
+		...(options?.includeEvents
+			? {
+					swapEvents: db
+						.prepare("SELECT * FROM swap_events ORDER BY block_number DESC LIMIT ?")
+						.all(options.eventsLimit ?? 10) as any,
+				}
+			: {}),
 	};
 }
+
+// Server Lifecycle
 
 const metricsCache = {
 	data: null as EnhancedMetrics | null,
 	lastUpdated: 0,
-	ttl: 10000, // 10 seconds
+	ttl: 10000,
 };
 
 function getCachedMetrics(
@@ -380,8 +421,9 @@ export function startServer(
 				res.writeHead(200, { "Content-Type": "application/json" });
 				res.end(JSON.stringify(metrics, null, 2));
 			} catch (error) {
+				console.error("[Server] Error:", error);
 				res.writeHead(500, { "Content-Type": "application/json" });
-				res.end(JSON.stringify({ error: "Failed to calculate metrics" }));
+				res.end(JSON.stringify({ error: "Internal Server Error" }));
 			}
 		} else {
 			res.writeHead(404, { "Content-Type": "application/json" });
@@ -390,6 +432,6 @@ export function startServer(
 	});
 
 	server.listen(port, () => {
-		console.log(`\n[Server] Server running at http://${ENV.API_HOST}:${port}/metrics`);
+		console.log(`\n[Server] Metrics API running at http://${ENV.API_HOST}:${port}/metrics`);
 	});
 }

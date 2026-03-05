@@ -43,9 +43,7 @@ export class RealtimeIndexer {
 		private config: NetworkConfig
 	) {}
 
-	/**
-	 * Initialize WebSocket connection
-	 */
+	// Initialize WebSocket connection
 	async connect(): Promise<void> {
 		const wsRpcUrl = this.getWebSocketUrl();
 
@@ -77,9 +75,7 @@ export class RealtimeIndexer {
 		}
 	}
 
-	/**
-	 * Get WebSocket URL from environment
-	 */
+	// Get WebSocket URL from environment
 	private getWebSocketUrl(): string | null {
 		// Try to convert HTTP RPC to WebSocket
 		const httpUrl = this.config.rpcUrl;
@@ -103,9 +99,7 @@ export class RealtimeIndexer {
 		return null;
 	}
 
-	/**
-	 * Handle reconnection logic
-	 */
+	// Handle reconnection logic
 	private handleReconnect(): void {
 		if (this.reconnectAttempts >= this.maxReconnectAttempts) {
 			console.error(`[Error] Max reconnection attempts reached. Switching to HTTP polling.`);
@@ -122,9 +116,7 @@ export class RealtimeIndexer {
 		}, this.reconnectDelay * this.reconnectAttempts);
 	}
 
-	/**
-	 * Watch for Swap events in real-time
-	 */
+	// Watch for Swap events in real-time
 	async watchSwapEvents(): Promise<(() => void) | null> {
 		if (!this.wsClient) {
 			console.warn("[Warning] WebSocket not connected. Call connect() first.");
@@ -152,9 +144,7 @@ export class RealtimeIndexer {
 		return unwatch;
 	}
 
-	/**
-	 * Process a single log event
-	 */
+	// Process a single log event
 	private async processLog(log: Log): Promise<void> {
 		try {
 			// Decode event
@@ -273,9 +263,7 @@ export class RealtimeIndexer {
 		}
 	}
 
-	/**
-	 * Subscribe to swap events
-	 */
+	// Subscribe to swap events
 	onSwap(callback: SwapCallback): () => void {
 		this.swapCallbacks.push(callback);
 
@@ -288,9 +276,7 @@ export class RealtimeIndexer {
 		};
 	}
 
-	/**
-	 * Hybrid mode: Initial batch scan + real-time watching
-	 */
+	// Hybrid mode: Initial batch scan + real-time watching
 	async startHybridMode(): Promise<() => void> {
 		console.log("\n[Mode] Starting hybrid mode...");
 
@@ -321,9 +307,7 @@ export class RealtimeIndexer {
 		};
 	}
 
-	/**
-	 * Disconnect WebSocket
-	 */
+	// Disconnect WebSocket
 	disconnect(): void {
 		if (this.wsClient) {
 			this.isConnected = false;
@@ -331,9 +315,7 @@ export class RealtimeIndexer {
 		}
 	}
 
-	/**
-	 * Check if WebSocket is connected
-	 */
+	// Check if WebSocket is connected
 	isWebSocketConnected(): boolean {
 		return this.isConnected;
 	}

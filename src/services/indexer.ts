@@ -163,7 +163,7 @@ export async function scanLogs(
 										// Slippage Calculation
 										try {
 											const decodedTx = decodeFunctionData({
-												abi: citreaRouterAbi,
+												abi: config.abi,
 												data: tx.input,
 											});
 
@@ -186,7 +186,7 @@ export async function scanLogs(
 													}
 												}
 											}
-										} catch (err) {
+										} catch {
 											// Failed to decode input or not a router swap
 										}
 
@@ -346,9 +346,9 @@ export async function scanLogs(
 	};
 
 	let summary = `\n[Success] Scan complete! Processed ${processedLogs.toLocaleString()} transactions, ${processedSwaps.toLocaleString()} swap events`;
-	summary += `\n  [Database] Database now contains: ${actualTxCount.count.toLocaleString()} transactions, ${actualSwapCount.count.toLocaleString()} swap events`;
+	summary += `\n  - Database Entries: ${actualTxCount.count.toLocaleString()} transactions, ${actualSwapCount.count.toLocaleString()} swap events`;
 	if (filledMissingFees > 0 || filledMissingSwaps > 0) {
-		summary += `\n  [Fix] Filled missing data: ${filledMissingFees} fees, ${filledMissingSwaps} swap events`;
+		summary += `\n  - Gap Recovery: Found ${filledMissingFees} missing fees, ${filledMissingSwaps} missing swap events`;
 	}
 	console.log(summary);
 }
@@ -537,7 +537,7 @@ export async function backfillTokenMetadata(
         LIMIT ?`
 	);
 	const insertMeta = db.prepare(
-		`INSERT OR IGNORE INTO token_metadata (address, decimals, symbol) VALUES (?, ?, ?)`
+		`INSERT OR IGNORE INTO token_metadata (address, decimals, symbol, coingecko_id) VALUES (?, ?, ?, ?)`
 	);
 
 	let processed = 0;
@@ -595,7 +595,7 @@ export async function backfillTokenMetadata(
 				else if (symUpper === "WBTC") decSan = 8;
 				else if (symUpper === "WETH") decSan = 18;
 
-				insertMeta.run(address.toLowerCase(), decSan, symbol);
+				insertMeta.run(address.toLowerCase(), decSan, symbol, null);
 				inserted++;
 				processed++;
 			}
