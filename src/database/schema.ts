@@ -24,9 +24,18 @@ export function createTables(db: Database.Database) {
     CREATE TABLE IF NOT EXISTS token_metadata (
       address TEXT PRIMARY KEY,
       decimals INTEGER NOT NULL,
-      symbol TEXT NOT NULL
+      symbol TEXT NOT NULL,
+      coingecko_id TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_token_metadata_address ON token_metadata(address);
+
+    CREATE TABLE IF NOT EXISTS token_prices (
+      address TEXT PRIMARY KEY,
+      price_usd REAL NOT NULL,
+      last_updated INTEGER NOT NULL,
+      FOREIGN KEY(address) REFERENCES token_metadata(address)
+    );
+    CREATE INDEX IF NOT EXISTS idx_token_prices_address ON token_prices(address);
     
     CREATE TABLE IF NOT EXISTS meta (
       key TEXT PRIMARY KEY,
@@ -101,6 +110,19 @@ export function createTables(db: Database.Database) {
 				ALTER TABLE swap_events ADD COLUMN amount_out_min TEXT;
 				ALTER TABLE swap_events ADD COLUMN execution_quality REAL;
 			`);
+		}
+	} catch {} // This catch block was missing for the previous try block
+
+	try {
+		const cols = db.prepare("PRAGMA table_info(token_metadata)").all() as Array<{
+			name: string;
+		}>;
+		const hasCgId = cols.some((c) => c.name.toLowerCase() === "coingecko_id");
+		if (!hasCgId) {
+			db.exec("ALTER TABLE token_metadata ADD COLUMN coingecko_id TEXT;");
+			db.exec(
+				"CREATE INDEX IF NOT EXISTS idx_token_metadata_cg_id ON token_metadata(coingecko_id);"
+			);
 		}
 	} catch {}
 }

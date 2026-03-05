@@ -8,7 +8,7 @@ export function initDatabase(dbFile: string): Database.Database {
 
 	createTables(db);
 
-	console.log("✓ Database initialized with event decoding support");
+	console.log("[SUCCESS] Database initialized with event decoding support");
 	return db;
 }
 
