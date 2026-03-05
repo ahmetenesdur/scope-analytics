@@ -1,21 +1,27 @@
 # Scope Analytics
 
-High-performance, modular blockchain indexer and analytics engine for **Citrea** and **Monad** networks.
+Scope Analytics (Modular Edition) is an enterprise-grade, high-performance blockchain indexer and analytics engine constructed for precision, scalability, and seamless integration with EVM-compatible networks like Citrea and Monad.
 
 ## Features
 
-- **Hybrid Indexing**: Seamlessly combines historical backfilling with real-time WebSocket monitoring.
-- **Multi-Network**: Built-in support for Citrea and Monad mainnets.
-- **Analytics Engine**: Real-time calculation of volumes, fees, and unique user activity.
-- **Slippage Analysis**: Introspective analysis of transaction execution quality vs user intent.
-- **Persistent Storage**: SQLite with WAL mode for robust, local data caching.
-- **API Server**: RESTful interface to serve metrics to dashboards.
+### Core Architecture
+
+- **Multi-Network Compatibility**: Native out-of-the-box configuration for Citrea and Monad, designed for rapid abstraction and extension to other EVM chains.
+- **Hybrid Indexing Engine**: Fuses robust historical data backfilling with ultra-low latency real-time WebSocket event ingestion.
+- **High-Concurrency Storage**: Utilizes SQLite in Write-Ahead Logging (WAL) mode tightly coupled with transaction-based storage strategies for maximum IO throughput.
+
+### Data & Analytics
+
+- **Dynamic Pricing Oracle**: Token metadata and fiat mappings via CoinGecko are managed dynamically within the database layer, abstracting away hardcoded constraints.
+- **Comprehensive Volume Analysis**: Multi-token inbound and outbound liquidity tracking normalized to USD values.
+- **Execution Quality Engine**: Advanced slippage analysis comparing user-intended limits against actual execution pricing metrics.
+- **On-Chain User Profiling**: Precise tracking of unique active addresses, top interacting entities, and transaction frequency matrices.
 
 ## Quick Start
 
-### One-Command Setup (Recommended)
+### Automated Setup (Recommended)
 
-Run the automated setup script to install dependencies, configure the environment, and launch the app:
+Run the automated setup script to install dependencies, configure environment, and launch:
 
 ```bash
 ./quickstart.sh
@@ -33,46 +39,55 @@ Run the automated setup script to install dependencies, configure the environmen
 
     ```bash
     cp .env.example .env
-    # Edit .env to set your RPC URLs
+    # Add your RPC URLs for Citrea and Monad
     ```
 
-3. **Start Indexer**
+3. **Launch**
     ```bash
     pnpm start
     ```
-    _Follow the interactive prompt to select a network and mode._
+    _Follow the prompts to select your network and operation mode._
 
-## Command Reference
+## API & Analytics
 
-| Command         | Description                          |
-| :-------------- | :----------------------------------- |
-| `pnpm start`    | Interactive mode (Recommended).      |
-| `pnpm realtime` | Listen for live events only.         |
-| `pnpm hybrid`   | Backfill + Realtime + API Server.    |
-| `pnpm db:check` | View database statistics and health. |
-| `pnpm export`   | Export metrics to `analytics.json`.  |
+The integrated server provides advanced analytics via **GET** `/metrics`.
 
-## Documentation
-
-- [Configuration](docs/configuration.md) - Environment variables and flags.
-- [Database](docs/database.md) - Schema and SQL queries.
-- [Usage](docs/usage.md) - Advanced CLI usage and workflows.
-
-## API Endpoint
-
-The server exposes a **GET** `/metrics` endpoint:
+### Response Example
 
 ```json
 {
-  "uniqueUsers": 29326,
-  "totalSwaps": 137365,
-  "totalFees": "123.456789 cBTC",
-  "dailyStats": [...],
-  "executionQuality": {
-    "averageMargin": "2.99%",
-    "riskyCount": 0,
-    "safeCount": 8
-  },
-  "recentSwaps": [...]
+	"uniqueActiveAddresses": 552,
+	"totalTransactions": 4280,
+	"cumulativeNetworkFees": "0.001947 cBTC",
+	"averageTransactionFee": "0.00000045 cBTC",
+	"totalSwapEvents": 4272,
+	"tokenMetrics": {
+		"liquidityIn": [
+			{ "contractAddress": "0x...", "volumeUsd": "$368738.28", "swapCount": 1440 },
+			{ "contractAddress": "0x...", "volumeUsd": "N/A", "swapCount": 250 }
+		],
+		"liquidityOut": []
+	},
+	"executionQuality": {
+		"averageSlippageMargin": "1.84%",
+		"highSlippageSwaps": 1402,
+		"standardSlippageSwaps": 2766
+	}
 }
 ```
+
+## Documentation
+
+- [Configuration](docs/configuration.md) - Environment variables and platform settings.
+- [Database](docs/database.md) - Schema design and Direct ID mapping.
+- [Usage](docs/usage.md) - Advanced CLI commands and hybrid workflows.
+
+## Command Reference
+
+| Command         | Description                                     |
+| :-------------- | :---------------------------------------------- |
+| `pnpm start`    | Interactive setup and launch.                   |
+| `pnpm hybrid`   | Full sync: Backfill + Realtime + API Server.    |
+| `pnpm realtime` | WebSocket only (no historical scan).            |
+| `pnpm export`   | Generate `analytics.json` for snapshot sharing. |
+| `pnpm db:check` | Integrity check and storage statistics.         |
