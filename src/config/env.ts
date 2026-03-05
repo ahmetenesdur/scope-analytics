@@ -24,6 +24,10 @@ export const ENV = {
 	MONAD_RPC_URL: process.env.MONAD_RPC_URL || "https://rpc1.monad.xyz",
 	MONAD_CHAIN_ID: parseInt(process.env.MONAD_CHAIN_ID || "143", 10),
 	MONAD_CONTRACT_ADDRESS: (process.env.MONAD_CONTRACT_ADDRESS ||
-		"0x274602a953847d807231d2370072f5f4e4594b44") as Address,
+		"0x274602a953847d807231d2370072f5f4E4594b44") as Address,
 	MONAD_DB_FILE: process.env.MONAD_DATABASE_FILE || "monad_cache.db",
+
+	// Pricing
+	PRICE_UPDATE_INTERVAL_MS: parseInt(process.env.PRICE_UPDATE_INTERVAL_MS || "3600000", 10), // Default 1 hour
+	COINGECKO_API_KEY: process.env.COINGECKO_API_KEY || "",
 };
