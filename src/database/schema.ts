@@ -99,6 +99,8 @@ export function createTables(db: Database.Database) {
           CREATE UNIQUE INDEX IF NOT EXISTS idx_swap_tx_log ON swap_events(tx_hash, log_index);
           CREATE INDEX IF NOT EXISTS idx_token_pair ON swap_events(token_in, token_out);
           CREATE INDEX IF NOT EXISTS idx_sender ON swap_events(sender);
+          -- ⚡ Bolt Optimization: Add index for recent swaps query
+          CREATE INDEX IF NOT EXISTS idx_swap_block_log ON swap_events(block_number DESC, log_index DESC);
         `);
 	} catch {}
 
