@@ -1,6 +1,6 @@
 # Scope Analytics
 
-Scope Analytics (Modular Edition) is an enterprise-grade, high-performance blockchain indexer and analytics engine constructed for precision, scalability, and seamless integration with EVM-compatible networks like Citrea and Monad.
+Scope Analytics (Modular Edition) is a blockchain indexer and analytics engine for EVM-compatible networks such as Citrea and Monad. It backfills historical events, follows new ones over WebSocket, stores them in SQLite, and serves volume, execution-quality and user metrics over a REST API.
 
 ## Features
 
